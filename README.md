@@ -89,6 +89,39 @@ k8s/
 
 ## Run with Docker
 
+### One-command bootstrap (PowerShell)
+
+```powershell
+./scripts/bootstrap.ps1
+```
+
+Optional:
+
+```powershell
+./scripts/bootstrap.ps1 -SkipBuild
+./scripts/bootstrap.ps1 -RunTests
+```
+
+### Automated end-to-end demo flow (PowerShell)
+
+Runs the full flow automatically: fixture reset, order creation via GraphQL, worker consume, and final status/events validation.
+
+```powershell
+./scripts/demo-flow.ps1
+```
+
+Payment-failure scenario:
+
+```powershell
+./scripts/demo-flow.ps1 -CustomerEmail fail@test.com
+```
+
+Useful options:
+
+```powershell
+./scripts/demo-flow.ps1 -Sku SKU-MOUSE-001 -Quantity 1 -WorkerTimeLimit 30
+```
+
 ### 1) Build and start
 
 ```bash
@@ -279,21 +312,3 @@ kubectl port-forward service/rabbitmq 15672:15672 -n orderflow
 - **Docker host ports**: se mapearon `8080` (app) y `5433` (PostgreSQL) para evitar conflictos locales detectados en el host.
 - **GraphQL IDs**: API Platform expone IDs como IRI (`/api/...`). `createOrder` acepta `productId` en formato UUID o IRI.
 - **Idempotencia**: se aplicó por handler con persistencia en `processed_messages` y constraint único en `message_id`.
-
-## Future Improvements
-
-- Integración real con gateway de pagos.
-- Integración real de email/SMS.
-- Autenticación y autorización.
-- Dashboard administrativo.
-- Flujo de cancelación de órdenes.
-- Expiración de reservas de stock.
-- Outbox pattern.
-- Monitoreo de dead-letter queues.
-- Métricas y tracing.
-- CI/CD pipeline.
-- Hardening de Kubernetes para producción.
-- Autoscaling horizontal de workers.
-- PostgreSQL administrado.
-- RabbitMQ operator.
-"# graph-symfony" 

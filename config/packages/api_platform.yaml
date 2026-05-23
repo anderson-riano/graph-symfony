@@ -1,0 +1,13 @@
+api_platform:
+    title: OrderFlow API
+    version: 1.0.0
+    graphql:
+        enabled: true
+        graphiql:
+            enabled: false
+        graphql_playground:
+            enabled: false
+    defaults:
+        stateless: true
+        cache_headers:
+            vary: ['Content-Type', 'Authorization', 'Origin']

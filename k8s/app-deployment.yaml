@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orderflow-app
+  namespace: orderflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orderflow-app
+  template:
+    metadata:
+      labels:
+        app: orderflow-app
+    spec:
+      containers:
+        - name: app
+          image: graph-symfony-php:latest
+          imagePullPolicy: IfNotPresent
+          command: ["php", "-S", "0.0.0.0:8000", "-t", "public"]
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: orderflow-config
+            - secretRef:
+                name: orderflow-secret

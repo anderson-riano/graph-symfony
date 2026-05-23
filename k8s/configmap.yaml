@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orderflow-config
+  namespace: orderflow
+data:
+  APP_ENV: "prod"
+  DATABASE_URL: "postgresql://app:app@postgres:5432/orderflow?serverVersion=16&charset=utf8"
+  MESSENGER_TRANSPORT_DSN: "amqp://guest:guest@rabbitmq:5672/%2f/messages"
