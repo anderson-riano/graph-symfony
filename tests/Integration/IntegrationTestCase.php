@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration;
 
+use App\Application\Messaging\Service\OutboxPublisher;
 use App\Domain\Product\Entity\Product;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
@@ -18,12 +19,15 @@ abstract class IntegrationTestCase extends KernelTestCase
 
     protected InMemoryTransport $asyncTransport;
 
+    protected OutboxPublisher $outboxPublisher;
+
     protected function setUp(): void
     {
         self::bootKernel();
 
         $this->entityManager = self::getContainer()->get(EntityManagerInterface::class);
         $this->asyncTransport = self::getContainer()->get('messenger.transport.async');
+        $this->outboxPublisher = self::getContainer()->get(OutboxPublisher::class);
         $this->asyncTransport->reset();
 
         if (!self::$schemaCreated) {
@@ -41,7 +45,7 @@ abstract class IntegrationTestCase extends KernelTestCase
     private function resetDatabase(): void
     {
         $connection = $this->entityManager->getConnection();
-        $connection->executeStatement('TRUNCATE TABLE processed_messages, order_event_logs, order_items, "orders", products RESTART IDENTITY CASCADE');
+        $connection->executeStatement('TRUNCATE TABLE outbox_messages, processed_messages, order_event_logs, order_items, "orders", products RESTART IDENTITY CASCADE');
     }
 
     private function seedProducts(): void

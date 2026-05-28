@@ -39,7 +39,7 @@ final class OrderGraphQlTest extends WebTestCase
             self::$schemaCreated = true;
         }
 
-        $this->entityManager->getConnection()->executeStatement('TRUNCATE TABLE processed_messages, order_event_logs, order_items, "orders", products RESTART IDENTITY CASCADE');
+        $this->entityManager->getConnection()->executeStatement('TRUNCATE TABLE outbox_messages, processed_messages, order_event_logs, order_items, "orders", products RESTART IDENTITY CASCADE');
         $this->seedProducts();
     }
 
@@ -56,7 +56,12 @@ final class OrderGraphQlTest extends WebTestCase
         self::assertArrayHasKey('data', $payload);
         self::assertSame('PENDING', $payload['data']['createOrder']['order']['status']);
         self::assertSame('240.00', $payload['data']['createOrder']['order']['total']);
-        self::assertCount(1, $this->asyncTransport->getSent());
+        self::assertCount(0, $this->asyncTransport->getSent());
+
+        $pendingOutboxCount = (int) $this->entityManager->getConnection()->fetchOne(
+            'SELECT COUNT(*) FROM outbox_messages WHERE published_at IS NULL'
+        );
+        self::assertSame(1, $pendingOutboxCount);
     }
 
     public function testOrderQuery(): void
@@ -83,16 +88,31 @@ final class OrderGraphQlTest extends WebTestCase
         self::assertSame('ORDER_CREATED', $payload['data']['order']['events']['edges'][0]['node']['eventName']);
     }
 
+    public function testCreateOrderValidationErrors(): void
+    {
+        $payload = $this->requestGraphQl(
+            'mutation { createOrder(input: { customerName: "", customerEmail: "not-email", items: [{ productId: "", quantity: 0 }] }) { order { id } } }',
+            false
+        );
+
+        self::assertArrayHasKey('errors', $payload);
+        self::assertNotEmpty($payload['errors']);
+        self::assertStringContainsString('customerName', json_encode($payload['errors'], JSON_THROW_ON_ERROR));
+        self::assertStringContainsString('customerEmail', json_encode($payload['errors'], JSON_THROW_ON_ERROR));
+    }
+
     /**
      * @return array<string, mixed>
      */
-    private function requestGraphQl(string $query): array
+    private function requestGraphQl(string $query, bool $expectSuccess = true): array
     {
         $this->client->request('POST', '/api/graphql', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode([
             'query' => $query,
         ], JSON_THROW_ON_ERROR));
 
-        self::assertResponseIsSuccessful();
+        if ($expectSuccess) {
+            self::assertResponseIsSuccessful();
+        }
 
         /** @var array<string, mixed> $payload */
         $payload = json_decode((string) $this->client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);

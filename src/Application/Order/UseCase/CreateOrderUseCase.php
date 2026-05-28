@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Application\Order\UseCase;
 
+use App\Application\Messaging\Service\OutboxRecorder;
 use App\Application\Order\DTO\CreateOrderInput;
 use App\Application\Order\Service\OrderEventLogger;
 use App\Domain\Order\Entity\Order;
@@ -14,7 +15,6 @@ use App\Domain\Order\Repository\OrderRepositoryInterface;
 use App\Domain\Product\Repository\ProductRepositoryInterface;
 use App\Infrastructure\Messenger\Message\OrderCreatedMessage;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\Uuid;
 
 final readonly class CreateOrderUseCase
@@ -24,7 +24,7 @@ final readonly class CreateOrderUseCase
         private OrderRepositoryInterface $orderRepository,
         private OrderEventLogger $orderEventLogger,
         private EntityManagerInterface $entityManager,
-        private MessageBusInterface $messageBus
+        private OutboxRecorder $outboxRecorder
     ) {
     }
 
@@ -91,14 +91,14 @@ final readonly class CreateOrderUseCase
             ),
         ]);
 
-        $this->entityManager->wrapInTransaction(function (EntityManagerInterface $_entityManager) use ($order): void {
+        $this->entityManager->wrapInTransaction(function () use ($order): void {
             $this->orderRepository->save($order);
+            $this->outboxRecorder->record(new OrderCreatedMessage(
+                Uuid::v7()->toRfc4122(),
+                $order->getId()->toRfc4122()
+            ));
+            $this->entityManager->flush();
         });
-
-        $this->messageBus->dispatch(new OrderCreatedMessage(
-            Uuid::v7()->toRfc4122(),
-            $order->getId()->toRfc4122()
-        ));
 
         return $order;
     }

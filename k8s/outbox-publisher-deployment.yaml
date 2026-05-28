@@ -1,25 +1,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: orderflow-app
+  name: orderflow-outbox-publisher
   namespace: orderflow
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: orderflow-app
+      app: orderflow-outbox-publisher
   template:
     metadata:
       labels:
-        app: orderflow-app
+        app: orderflow-outbox-publisher
     spec:
+      terminationGracePeriodSeconds: 30
       containers:
-        - name: app
+        - name: outbox-publisher
           image: graph-symfony-php:latest
           imagePullPolicy: IfNotPresent
-          command: ["php", "-S", "0.0.0.0:8000", "-t", "public"]
-          ports:
-            - containerPort: 8000
+          command:
+            - php
+            - bin/console
+            - app:outbox:publish
+            - --loop
+            - --limit=50
+            - --sleep-ms=1000
           envFrom:
             - configMapRef:
                 name: orderflow-config
@@ -27,8 +32,8 @@ spec:
                 name: orderflow-secret
           resources:
             requests:
-              cpu: "100m"
-              memory: "128Mi"
+              cpu: "50m"
+              memory: "64Mi"
             limits:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: "250m"
+              memory: "256Mi"

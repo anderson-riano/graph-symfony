@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Messenger\Handler;
 
-use App\Application\Messaging\Service\MessageIdempotencyService;
 use App\Application\Inventory\Service\InventoryReservationService;
+use App\Application\Messaging\Service\MessageIdempotencyService;
+use App\Application\Messaging\Service\OutboxRecorder;
 use App\Application\Order\Service\OrderEventLogger;
 use App\Domain\Order\Enum\OrderEventName;
 use App\Domain\Order\Enum\OrderStatus;
@@ -14,7 +15,6 @@ use App\Infrastructure\Messenger\Message\InventoryReservedMessage;
 use App\Infrastructure\Messenger\Message\OrderCreatedMessage;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
-use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\Uuid;
 
 #[AsMessageHandler]
@@ -26,7 +26,7 @@ final readonly class OrderCreatedMessageHandler
         private OrderEventLogger $orderEventLogger,
         private MessageIdempotencyService $messageIdempotencyService,
         private EntityManagerInterface $entityManager,
-        private MessageBusInterface $messageBus
+        private OutboxRecorder $outboxRecorder
     ) {
     }
 
@@ -41,8 +41,7 @@ final readonly class OrderCreatedMessageHandler
             return;
         }
 
-        $nextMessage = null;
-        $this->entityManager->wrapInTransaction(function () use ($order, $message, &$nextMessage): void {
+        $this->entityManager->wrapInTransaction(function () use ($order, $message): void {
             if (!$this->messageIdempotencyService->guard($message->messageId, $message::class)) {
                 return;
             }
@@ -60,6 +59,7 @@ final readonly class OrderCreatedMessageHandler
                     Uuid::v7()->toRfc4122(),
                     $order->getId()->toRfc4122()
                 );
+                $this->outboxRecorder->record($nextMessage);
             } catch (\Throwable $exception) {
                 $order->transitionTo(OrderStatus::FAILED);
                 $this->orderEventLogger->log(
@@ -71,9 +71,5 @@ final readonly class OrderCreatedMessageHandler
             }
             $this->entityManager->flush();
         });
-
-        if ($nextMessage !== null) {
-            $this->messageBus->dispatch($nextMessage);
-        }
     }
 }

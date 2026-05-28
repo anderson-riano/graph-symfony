@@ -37,5 +37,7 @@ Write-Host "App: http://localhost:8080" -ForegroundColor Green
 Write-Host "GraphQL: http://localhost:8080/api/graphql" -ForegroundColor Green
 Write-Host "RabbitMQ UI: http://localhost:15672" -ForegroundColor Green
 Write-Host ""
-Write-Host "Start worker with:" -ForegroundColor Yellow
-Write-Host "docker compose exec php php bin/console messenger:consume async -vv" -ForegroundColor Yellow
+Write-Host "Workers are running as docker services: worker + outbox_publisher" -ForegroundColor Yellow
+Write-Host "Watch logs with:" -ForegroundColor Yellow
+Write-Host "docker compose logs -f worker" -ForegroundColor Yellow
+Write-Host "docker compose logs -f outbox_publisher" -ForegroundColor Yellow

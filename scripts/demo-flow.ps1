@@ -107,10 +107,6 @@ $order = $createOrderData.createOrder.order
 $orderId = $order.id
 Write-Host ("Created order: {0} status={1} total={2}" -f $orderId, $order.status, $order.total) -ForegroundColor Green
 
-Step "Consuming async messages (time-limit=$WorkerTimeLimit s)"
-docker compose exec php php bin/console messenger:consume async -vv --time-limit=$WorkerTimeLimit | Out-Host
-
-Step "Fetching final order state and event trail"
 $orderQuery = @"
 query {
   order(id: "$orderId") {
@@ -131,8 +127,27 @@ query {
 }
 "@
 
-$orderData = Invoke-GraphQl -Query $orderQuery
-$finalOrder = $orderData.order
+Step "Publishing outbox + consuming async messages"
+$finalOrder = $null
+for ($iteration = 1; $iteration -le 6; $iteration++) {
+    Write-Host ("Iteration {0}: publish outbox and consume queue" -f $iteration) -ForegroundColor DarkGray
+    docker compose exec php php bin/console app:outbox:publish --limit=50 | Out-Host
+    docker compose exec php php bin/console messenger:consume async -vv --time-limit=$WorkerTimeLimit | Out-Host
+
+    $currentOrderData = Invoke-GraphQl -Query $orderQuery
+    $currentStatus = $currentOrderData.order.status
+    if ($currentStatus -eq "CONFIRMED" -or $currentStatus -eq "FAILED") {
+        $finalOrder = $currentOrderData.order
+        break
+    }
+}
+
+if ($null -eq $finalOrder) {
+    $orderData = Invoke-GraphQl -Query $orderQuery
+    $finalOrder = $orderData.order
+}
+
+Step "Fetching final order state and event trail"
 $eventNames = @($finalOrder.events.edges | ForEach-Object { $_.node.eventName })
 
 $expectedStatus = if ($CustomerEmail.ToLower().Contains("fail")) { "FAILED" } else { "CONFIRMED" }

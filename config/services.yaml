@@ -22,6 +22,7 @@ services:
     App\Domain\Product\Repository\ProductRepositoryInterface: '@App\Infrastructure\Doctrine\Repository\ProductRepository'
     App\Domain\Order\Repository\OrderRepositoryInterface: '@App\Infrastructure\Doctrine\Repository\OrderRepository'
     App\Domain\Messaging\Repository\ProcessedMessageRepositoryInterface: '@App\Infrastructure\Doctrine\Repository\ProcessedMessageRepository'
+    App\Domain\Messaging\Repository\OutboxMessageRepositoryInterface: '@App\Infrastructure\Doctrine\Repository\OutboxMessageRepository'
 
     App\Infrastructure\GraphQL\Mutation\CreateOrderMutationResolver:
         tags: [ 'api_platform.graphql.mutation_resolver' ]

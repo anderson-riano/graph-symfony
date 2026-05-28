@@ -12,6 +12,7 @@ RUN apt-get update \
         pdo \
         pdo_pgsql \
         intl \
+        pcntl \
         zip \
     && pecl install amqp \
     && docker-php-ext-enable amqp \

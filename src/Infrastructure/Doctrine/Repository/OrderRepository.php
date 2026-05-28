@@ -22,9 +22,7 @@ final class OrderRepository extends ServiceEntityRepository implements OrderRepo
 
     public function save(Order $order): void
     {
-        $em = $this->getEntityManager();
-        $em->persist($order);
-        $em->flush();
+        $this->getEntityManager()->persist($order);
     }
 
     public function findById(Uuid $id): ?Order

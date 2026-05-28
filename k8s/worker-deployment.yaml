@@ -4,7 +4,7 @@ metadata:
   name: orderflow-worker
   namespace: orderflow
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: orderflow-worker
@@ -13,6 +13,7 @@ spec:
       labels:
         app: orderflow-worker
     spec:
+      terminationGracePeriodSeconds: 60
       containers:
         - name: worker
           image: graph-symfony-php:latest
@@ -25,8 +26,17 @@ spec:
             - -vv
             - --time-limit=3600
             - --memory-limit=256M
+            - --failure-limit=20
+            - --sleep=1000000
           envFrom:
             - configMapRef:
                 name: orderflow-config
             - secretRef:
                 name: orderflow-secret
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

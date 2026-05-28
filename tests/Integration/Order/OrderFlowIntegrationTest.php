@@ -26,16 +26,28 @@ final class OrderFlowIntegrationTest extends IntegrationTestCase
 {
     public function testCreateOrderUseCase(): void
     {
-        [$order] = $this->createPendingOrder(2, 'anderson@test.com');
+        $useCase = self::getContainer()->get(CreateOrderUseCase::class);
+        $keyboard = $this->entityManager->getRepository(Product::class)->findOneBy(['sku' => 'SKU-KEYBOARD-001']);
+        self::assertInstanceOf(Product::class, $keyboard);
+
+        $order = $useCase->execute(new CreateOrderInput(
+            'Test Customer',
+            'anderson@test.com',
+            [new CreateOrderItemInput($keyboard->getId()->toRfc4122(), 2)]
+        ));
 
         $this->entityManager->clear();
         $reloadedOrder = $this->entityManager->getRepository(Order::class)->find($order->getId());
+        $pendingOutboxCount = (int) $this->entityManager->getConnection()->fetchOne(
+            'SELECT COUNT(*) FROM outbox_messages WHERE published_at IS NULL'
+        );
 
         self::assertInstanceOf(Order::class, $reloadedOrder);
         self::assertSame(OrderStatus::PENDING, $reloadedOrder->getStatus());
         self::assertSame('240.00', $reloadedOrder->getTotal());
         self::assertCount(1, $reloadedOrder->getEvents());
         self::assertSame(OrderEventName::ORDER_CREATED, $reloadedOrder->getEvents()->first()->getEventName());
+        self::assertSame(1, $pendingOutboxCount);
     }
 
     public function testStockReservationSuccess(): void
@@ -45,6 +57,7 @@ final class OrderFlowIntegrationTest extends IntegrationTestCase
 
         $handler = self::getContainer()->get(OrderCreatedMessageHandler::class);
         $handler($orderCreatedMessage);
+        $published = $this->outboxPublisher->publishPending(10);
 
         $this->entityManager->clear();
         $reloadedOrder = $this->entityManager->getRepository(Order::class)->find($order->getId());
@@ -54,6 +67,7 @@ final class OrderFlowIntegrationTest extends IntegrationTestCase
         self::assertSame(OrderStatus::INVENTORY_RESERVED, $reloadedOrder->getStatus());
         self::assertInstanceOf(Product::class, $keyboard);
         self::assertSame(8, $keyboard->getStock());
+        self::assertSame(1, $published);
         self::assertCount(1, $this->asyncTransport->getSent());
         self::assertInstanceOf(InventoryReservedMessage::class, $this->asyncTransport->getSent()[0]->getMessage());
     }
@@ -65,6 +79,7 @@ final class OrderFlowIntegrationTest extends IntegrationTestCase
 
         $handler = self::getContainer()->get(OrderCreatedMessageHandler::class);
         $handler($orderCreatedMessage);
+        $published = $this->outboxPublisher->publishPending(10);
 
         $this->entityManager->clear();
         $reloadedOrder = $this->entityManager->getRepository(Order::class)->find($order->getId());
@@ -74,6 +89,7 @@ final class OrderFlowIntegrationTest extends IntegrationTestCase
         self::assertSame(OrderStatus::FAILED, $reloadedOrder->getStatus());
         self::assertInstanceOf(Product::class, $keyboard);
         self::assertSame(10, $keyboard->getStock());
+        self::assertSame(0, $published);
         self::assertCount(0, $this->asyncTransport->getSent());
         self::assertTrue(
             $reloadedOrder->getEvents()->exists(
@@ -90,6 +106,7 @@ final class OrderFlowIntegrationTest extends IntegrationTestCase
         $handler = self::getContainer()->get(OrderCreatedMessageHandler::class);
         $handler($orderCreatedMessage);
         $handler($orderCreatedMessage);
+        $published = $this->outboxPublisher->publishPending(10);
 
         $this->entityManager->clear();
         $reloadedOrder = $this->entityManager->getRepository(Order::class)->find($order->getId());
@@ -104,6 +121,8 @@ final class OrderFlowIntegrationTest extends IntegrationTestCase
         self::assertInstanceOf(Product::class, $keyboard);
         self::assertSame(9, $keyboard->getStock());
         self::assertSame(1, $processedCount);
+        self::assertSame(1, $published);
+        self::assertCount(1, $this->asyncTransport->getSent());
     }
 
     public function testOrderConfirmedAfterSuccessfulFlow(): void
@@ -117,14 +136,17 @@ final class OrderFlowIntegrationTest extends IntegrationTestCase
         $orderConfirmedHandler = self::getContainer()->get(OrderConfirmedMessageHandler::class);
 
         $orderCreatedHandler($orderCreatedMessage);
+        self::assertSame(1, $this->outboxPublisher->publishPending(10));
         $inventoryMessage = $this->extractSentMessage(InventoryReservedMessage::class);
         $this->asyncTransport->reset();
 
         $inventoryReservedHandler($inventoryMessage);
+        self::assertSame(1, $this->outboxPublisher->publishPending(10));
         $paymentMessage = $this->extractSentMessage(PaymentApprovedMessage::class);
         $this->asyncTransport->reset();
 
         $paymentApprovedHandler($paymentMessage);
+        self::assertSame(1, $this->outboxPublisher->publishPending(10));
         $orderConfirmedMessage = $this->extractSentMessage(OrderConfirmedMessage::class);
         $this->asyncTransport->reset();
 
@@ -164,6 +186,9 @@ final class OrderFlowIntegrationTest extends IntegrationTestCase
             $email,
             [new CreateOrderItemInput($keyboard->getId()->toRfc4122(), $quantity)]
         ));
+
+        self::assertCount(0, $this->asyncTransport->getSent());
+        self::assertSame(1, $this->outboxPublisher->publishPending(10));
 
         $envelopes = $this->asyncTransport->getSent();
         self::assertCount(1, $envelopes);

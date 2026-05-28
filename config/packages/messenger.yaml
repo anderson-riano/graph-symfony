@@ -10,7 +10,7 @@ framework:
                     delay: 1000
                     multiplier: 2
                     max_delay: 0
-            failed: 'doctrine://default?queue_name=failed'
+            failed: 'doctrine://default?queue_name=failed&auto_setup=false'
 
         routing:
             App\Infrastructure\Messenger\Message\OrderCreatedMessage: async
